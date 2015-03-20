@@ -1,15 +1,16 @@
-from curl_task import download_task, download_task_from_cmdline
+from tasks import download_task, download_task_from_cmdline
 import shlex
 
 def do_request(s, queue):
     req = shlex.split(s)
+    print(req)
     if req[0] == 'download':
         do_download(req[1:], queue)
     elif req[0] == 'curl':
         do_curl(req[1:], queue)
     else:
         return r'{0}: No such service. The leather club is two blocks down.'.format(s)
-    return r'{0}: Fucking Slaves get your asses back here!'.format(req[0])
+    return None
 
 def do_download(download_param, queue):
     if len(download_param) == 1:

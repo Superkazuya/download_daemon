@@ -1,24 +1,27 @@
-<meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
+
 <html>
   <head>
+    <meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
     <title>Download Server</title>
   </head>
   <body>
-    <form method="POST">
-	<textarea type="submit" value="Submit" name="request" required></textarea>
-	<!--<input type="submit" value="Submit" onclick="get_update_json('grunt_status_onload.json', grunt_status_onload_callback)">-->
-	<input type="submit" value="Submit">
-    </form>
+    <div id="form">
+	<textarea rows="10" cols="300" name="request" id="request_input"></textarea>
+	<button id = "submit" onclick="submit_request()">submit</button>
+	<div id="response_msg">
+	  </div>
+    </div>
+
     <h1>ongoing tasks</h1>
-    <div id=ongoing>{ongoing}
+    <div id="ongoing">{ongoing}
     </div>
     <h1>pending tasks</h1>
-    <div id=pending>{pending}
+    <div id="pending">{pending}
     </div>
     <h1>finished tasks</h1>
-    <div id=finished>{finished}
+    <div id="finished">{finished}
     </div>
-    <script src="/reload.js"></script>
+    <script type="text/javascript" src="/reload.js"></script>
   </body>
 </html>
 

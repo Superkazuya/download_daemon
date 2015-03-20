@@ -1,10 +1,30 @@
 import pycurl
 import argparse
+from threading import Condition
+
+class event_handler():
+    #every single instance => one receiving end
+    def __init__(self):
+        self.cv = Condition()
+        self.event = None
+    def send_asycn(self, event):
+        with self.cv:
+            self.event = event
+            self.cv.notify_all()
 
 class task():
+    ev_hander = event_handler()
+    #one single class variable means there's only one receiving end(event stream in sse)
     def __init__(self):
-        self.finished = 0;
-        self.total = 0;
+        self.finished = 0
+        self.total = 0
+        self.state = 0
+        #0: pending 1:suspended 2:active (or probably finished)
+        self.grunt = None
+        #which grunt is doing the work?
+        self.identifier = hex(id(self))
+        #task unique identifier
+        
     def get_status(self):
         raise NotImplemented
     def get_progress(self):
@@ -31,7 +51,12 @@ class download_task(task):
             self.curl.setopt(self.curl.WRITEDATA, fd)
 
             print("Download {0} to ./{1}.".format(str(self.url), str(self.filename)))
-            self.curl.perform()
+            try:
+                self.curl.perform()
+                self.state = 2
+            except pycurl.error as e:
+                self.ev_hander.send_asycn("Error while resuming task: "+ e.args)
+                
             if self.curl.getinfo(self.curl.RESPONSE_CODE) != 200:
                 print("response code: {0}".format(self.curl.RESPONSE_CODE))
         self.curl.close()
@@ -40,18 +65,26 @@ class download_task(task):
         return ' > Downloading {0}'.format(self.filename)
         
     def pause(self):
-        self.curl.pause(self.curl.PAUSE_RECV)
+        try:
+            self.curl.pause(self.curl.PAUSE_RECV)
+            self.state = 1
+        except pycurl.error as e:
+            self.ev_hander.send_asycn("Error while resuming task: "+ e.args)
 
     def resume(self):
-        self.curl.pause(self.curl.PAUSE_CONT)
+        try:
+            self.curl.pause(self.curl.PAUSE_CONT)
+            self.state = 2
+        except pycurl.error as e:
+            self.ev_hander.send_asycn("Error while resuming task: "+ e.args)
 
     def progress(self, total_download, downloaded, total_upload, uploaded):
-        string = "\rDownloading to {0} {1:.2f}/{2:.2f} ({3:.2f}%)"
-        try:
-            percentage = 100*downloaded/total_download
-            print(string.format(self.filename, downloaded, total_download, percentage), end='')
-        except ZeroDivisionError:
-            pass
+        #string = r"Downloading to {0} {1:.2f}/{2:.2f} ({3:.2f}%)"
+        #try:
+        #    percentage = 100*downloaded/total_download
+        #    print("\r", string.format(self.filename, downloaded, total_download, percentage), end='')
+        #except ZeroDivisionError:
+        #    pass
         self.finished, self.total= downloaded, total_download
 
     def get_progress(self):

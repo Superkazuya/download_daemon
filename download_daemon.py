@@ -21,12 +21,16 @@ class task_list(list):
         return json.dumps(progress)
 
     def get_status(self):
-        status = []
+        status = [[], []]
         for worker in self:
             if worker.task:
-                status.append(worker.task.get_status())
+                status[0].append(worker.task.get_status())
             else:
-               status.append([])
+               status[0].append([])
+        if not task_queue.empty():
+            for i in task_queue.queue:
+                status[1].append(i.get_status())
+            #dangerous?
         return json.dumps(status)
 
     def generate_etag(self):
@@ -45,8 +49,6 @@ class task_list(list):
             self.cv.notify_all()
 
 
-
-                        
 worker_list = task_list()
 worker_list.cv = Condition()
 #dirty?
@@ -65,10 +67,8 @@ class grunt:
         while True:
             self.task = task_queue.get()
             worker_list.get_status_on_change()
-            print("task start!")
             self.task.start()
             self.task = None
-            print("task done!")
             worker_list.get_status_on_change()
             task_queue.task_done()
 
@@ -82,28 +82,18 @@ def apply_async_error_callback(arg):
     pass
     
 if __name__ == '__main__':
+    thread_pool = ThreadPool(thread_num)
+    for i in range(thread_num):
+        thread_pool.apply_async(grunt, callback=apply_async_callback, error_callback=apply_async_error_callback)
+
+    cgitb.enable(display = 0, logdir = '/home/superkazuya/Code/15/download_daemon/')
+
+    HTTP_request_handler.workers = worker_list
+    HTTP_request_handler.task_queue = task_queue
+    serv = HTTP_server(("", 8080), HTTP_request_handler)
+    worker_list.get_status_on_change()
+    #generate ETag when init
     try:
-        thread_pool = ThreadPool(thread_num)
-        for i in range(thread_num):
-            thread_pool.apply_async(grunt, callback=apply_async_callback, error_callback=apply_async_error_callback)
-
-        # test_list = ['google.com test.0',
-        #              'amazon.com test.1',
-        #              'ebay.com test.2',
-        #              'yahoo.com test.3',
-        #              'http://mirror.internode.on.net/pub/test/1meg.test 1meg.test',
-        #              'http://mirror.internode.on.net/pub/test/1meg.test 1meg.test0']
-
-        # for i in test_list:
-        #     do_request('download '+i, task_queue)
-
-        cgitb.enable(display = 0, logdir = '/home/superkazuya/Code/15/download_daemon/')
-
-        HTTP_request_handler.workers = worker_list
-        HTTP_request_handler.task_queue = task_queue
-        serv = HTTP_server(("", 8080), HTTP_request_handler)
-        worker_list.get_status_on_change()
-        #generate ETag when init
         serv.serve_forever()
     except KeyboardInterrupt:
         pass
