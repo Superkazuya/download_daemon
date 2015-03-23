@@ -3,7 +3,6 @@ import shlex
 
 def do_request(s, queue):
     req = shlex.split(s)
-    print(req)
     if req[0] == 'download':
         do_download(req[1:], queue)
     elif req[0] == 'curl':
@@ -17,10 +16,8 @@ def do_download(download_param, queue):
         filename = None
     else:
         filename = download_param[1]
-    print('downloading to:', filename)
     queue.put(download_task(download_param[0], filename))
 
 def do_curl(download_param, queue):
-    print(download_param)
     queue.put(download_task_from_cmdline(download_param))
  
