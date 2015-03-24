@@ -20,8 +20,6 @@ class task():
         
     def get_status(self):
         raise NotImplemented
-    def get_progress(self):
-        raise NotImplemented
     def on_complete(self):
         pass
         
@@ -34,8 +32,9 @@ class task():
             self.last_event_id = ev.get_key();
             ev.data = data
             task.event_list.append(ev)
-            #if it's in the list, it's already readable. But It's next node is probably None
-        #return ev
+            #Due to GIL, if it's in the list, it's already readable. But the self.sentinel._prev node is probably still not changed?
+            task.event_list.new_event.set()
+            task.event_list.new_event.clear()
 
 
 class download_task(task):
@@ -114,10 +113,6 @@ class download_task(task):
             self.size_get = True
             self.generate_event('size', total_download)
         
-    def get_progress(self):
-        return [int(self.finished), int(self.total)]
-
- 
 class download_task_from_cmdline(download_task):
     def __init__(self, cmdline):
         parser = argparse.ArgumentParser()

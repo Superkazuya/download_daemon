@@ -1,13 +1,10 @@
 from multiprocessing.pool import ThreadPool
-from threading import Thread
+from threading import Thread, Timer
 from server import HTTP_request_handler, HTTP_server
-from snapshot import summary
 import cgitb
 from queue import Queue
 from protocol import do_request
-import json
-import datetime
-from tasks import task
+from events import event_list, summary
 
 task_queue = Queue()
 
@@ -45,9 +42,8 @@ if __name__ == '__main__':
 
     summary_generating_thread = Thread(target = summary.update_all)
     summary_generating_thread.start()
+    event_list.garbage_collection()
     
-
-    cgitb.enable(display = 0, logdir = '/home/superkazuya/Code/15/download_daemon/')
 
     HTTP_request_handler.task_queue = task_queue
     serv = HTTP_server(("", 8080), HTTP_request_handler)
@@ -58,12 +54,9 @@ if __name__ == '__main__':
         pass
 
     finally:
-        try:
             serv.shutdown()
             summary_generating_thread.join()
             thread_pool.close()
             thread_pool.join()
-        except KeyboardInterrupt:
-            pass
         
 
