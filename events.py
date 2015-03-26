@@ -1,5 +1,6 @@
 import datetime
 from threading import Lock, Event, Timer
+from weakref import WeakValueDictionary
 
 class list_node:
     def __init__(self):
@@ -42,6 +43,7 @@ class event(list_node):
         t = t - datetime.datetime(2015, 3, 14)
         t /= datetime.timedelta(microseconds=1)
         return hex(int(t))[2:]
+
 class task_event(event):
     #These events will be checked by the server and dispatched to clients.
     def __init__(self, ev_type, task):
@@ -54,8 +56,8 @@ class task_event(event):
 class linked_list:
     def __init__(self):
         self.sentinel = list_node()
-        self.sentinel._next = self.sentinel
         self.sentinel._prev = self.sentinel
+        self.sentinel._next = self.sentinel
 
     def append(self, new_node):
         new_node._next = self.sentinel
@@ -92,24 +94,25 @@ class event_linked_list(linked_list):
         self.sentinel.event_id = '0'
         self.lock = Lock()
         self.new_event = Event()
-        self.users = []
+        self.users = WeakValueDictionary()
 
     def garbage_collection(self):
         #if not self.sentinel._next is self.sentinel:
         if not (self.sentinel._next is self.sentinel or self.sentinel._next._next is self.sentinel):
+            #nothing to clean, or only one node is left
             oldest_node_to_keep = self.sentinel._prev
 
-            #print('-'*40)
             with summary.mutexlock:
-                for user in self.users:
+                for id, user in self.users.items():
                     if user.newest_ev_node < oldest_node_to_keep:
                         oldest_node_to_keep = user.newest_ev_node
 
             while self.sentinel._next < oldest_node_to_keep and not self.sentinel._next is self.sentinel:
                 self.popleft()
-            #print("cleaning... the oldest event in the list is now", self.sentinel._next.event_id)
-            #print("the newes event in the list is now", self.sentinel._prev.event_id)
-        gc = Timer(30, self.garbage_collection)
+            #print('-'*40)
+            print("cleaning... the oldest event in the list is now", self.sentinel._next.event_id)
+            print("the newes event in the list is now", self.sentinel._prev.event_id)
+        gc = Timer(20, self.garbage_collection)
         gc.start()
 
     #def newest_nodes_ref(self, event_id):
@@ -139,7 +142,7 @@ class snapshot(dict):
         #lock to sync with new_connection
         #so new connections could block without affecting others
         #It's still possible to block all new connections forever though
-        event_list.users.append(self)
+        event_list.users[id(self)] = self
         #won't need to delete itself
 
     #key = task.identifier

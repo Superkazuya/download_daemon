@@ -48,7 +48,8 @@ class another_curl_class():
             except pycurl.error as e:
                 #we need to cancel it anyway
                 if not self.cancel:
-                    print('cancel due to error while downloading', self.fullname, 'error=>', e)
+                    self.error_callback(e)
+
                 self.cancel_callback()
                 self.cancel_cleanup()
             else:
@@ -145,4 +146,7 @@ class another_curl_class():
             self.headers[name] = value
 
     def remote_filename_callback(self, remote_filename):
+        pass
+
+    def error_callback(self, error):
         pass

@@ -28,7 +28,7 @@ def apply_async_callback(arg):
     print(arg)
 
 def apply_async_error_callback(arg):
-    print("error", arg)
+    print("error "*40, arg)
     pass
     
 if __name__ == '__main__':

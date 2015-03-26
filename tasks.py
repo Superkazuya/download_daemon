@@ -36,7 +36,8 @@ class task():
             ev = events.task_event(ev_type, self)
             ev.data = data
             task.event_list.append(ev)
-            #Thanks to GIL, if it's in the list, it's already readable. But the self.sentinel._prev node is probably still not changed?
+            #if it's in the list, it's already readable.
+            #because the last meaningful bytecode is STORE_ATTR(_prev) in linked_list append() method
             task.event_list.new_event.set()
             task.event_list.new_event.clear()
 
@@ -72,6 +73,8 @@ class download_task(task):
         self.c.cancel_callback = lambda:self.state_change(4)
         self.c.complete_callback = lambda:self.state_change(5)
         self.c.remote_filename_callback = lambda x:self.generate_event('description', x)
+        self.c.error_callback = lambda x:self.generate_event('error', self.c.remote_filename+' canceled due to error '+str(x)) if self.c.remote_filename \
+                                else self.generate_event('error', self.c.fullname +' ('+self.url+') canceled due to error '+str(x))
 
 
     def send_messages_when_ready(self):

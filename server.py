@@ -24,8 +24,6 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
         except (server.socket.error, server.socket.timeout) as e:
             print('-'*40)
             print("connection dropped", e.args)
-        finally:
-            self.on_del()
 
     def do_GET(self):
         print('active threads num', threading.active_count())
@@ -35,7 +33,7 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
                 self.send_header('Content-type', 'application/javascript')
                 self.end_headers()
                 self.wfile.write(to_bytes(f.read()))
-                return
+
         elif self.path == '/events':
             #moreee consumers
             #self.protocol_version = 'HTTP/1.1'
@@ -62,32 +60,14 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
                 self.wfile.write(to_bytes('event: summary'))
                 with summary.mutexlock:
                     #will only block when it's a new connection. But still it's blocking
-                    eid = summary.newest_ev_node.event_id
-                    data = json.dumps(summary)
+                    event_list.users[id(self)] = self
                     self.newest_ev_node = summary.newest_ev_node
-                    event_list.users.append(self)
-                self.wfile.write(to_bytes('\nid: {0} \ndata: {1}'.format(eid, data)))
+                    data = json.dumps(summary)
+                    #it's a garbage collection thing
+                self.wfile.write(to_bytes('\nid: {0} \ndata: {1}'.format(self.newest_ev_node.event_id, data)))
                 self.wfile.write(to_bytes('\n\n'))
                 print("provide the new connection with summary data", data)
 
-#            while True:
-#                if (event._next is event_list.sentinel):
-#                    #what if generate_event() is scheduled here?
-#                    event_list.new_event.wait()
-#                else:
-#                    next_event = event._next
-#                    self.wfile.write(to_bytes('event: update'))
-#                    #event_string += event.task.identifier
-#                    self.wfile.write(to_bytes('\nid: '))
-#                    self.wfile.write(to_bytes(next_event.event_id))
-#                    self.wfile.write(to_bytes('\ndata: '))
-#                    json_data = json.dumps(next_event.to_dict())
-#                    self.wfile.write(to_bytes(json_data))
-#                    self.wfile.write(to_bytes('\n\n'))
-#                    #print(json_data)
-#                    #print('event_string',event_string)
-#                    #print('event_list count', event_list.count)
-#                    event = next_event
             while True:
                 if not self.newest_ev_node._next is event_list.sentinel:
                     next_event = self.newest_ev_node._next
@@ -98,8 +78,6 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
                     json_data = json.dumps(next_event.to_dict())
                     self.wfile.write(to_bytes(json_data))
                     self.wfile.write(to_bytes('\n\n'))
-                    #event_list.newest_nodes_ref(next_event.event_id)
-                    #event_list.newest_nodes_unref(self.newest_ev_node.event_id)
                     self.newest_ev_node = next_event
                 else:
                     event_list.new_event.wait(2)
@@ -107,7 +85,6 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
                     self.wfile.write(to_bytes('\ndata: '))
                     self.wfile.write(to_bytes('are you alive?'))
                     self.wfile.write(to_bytes('\n\n'))
-
            
         elif self.path == '/':
             self.send_response(200)
@@ -119,9 +96,8 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
             dic['finished'] = ''
             with open('main.html', 'r') as f:
                 self.wfile.write(to_bytes(f.read().format(**dic)))
-            return
-
-        self.send_error(404)
+        else:
+            self.send_error(404)
                     
 
     def do_POST(self):
@@ -168,18 +144,7 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
         else:
             self.wfile.write(to_bytes('fuck you leather man.'))
             
-                
-
-    def on_del(self):
-        if hasattr(self, 'newest_ev_node'):
-            try:
-                event_list.users.remove(self)
-            except ValueError:
-                print(event_list.users)
-            #it's a user of event_list, need to remove it from the user dict
-            #event_list.newest_nodes_unref(self.newest_ev_node.event_id)
-            #TODO use weakref
-                
+                 
 if __name__ == '__main__':
     serv = HTTP_server(("", 8080), HTTP_request_handler)
     try:
