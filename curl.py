@@ -1,6 +1,7 @@
 import pycurl 
 import os, re
 import uuid 
+from urllib import parse
 
 class another_curl_class():
     def __init__(self):
@@ -90,6 +91,7 @@ class another_curl_class():
             return
 
         self.pause = True
+        self.pause_callback()
 
     def resume_callback(self):
         pass
@@ -102,6 +104,7 @@ class another_curl_class():
             print('resume error: not paused.')
             return
         self.pause = False
+        self.resume_callback()
 
     def in_progress_callback(self):
         #place this in the progress callback
@@ -111,10 +114,8 @@ class another_curl_class():
             
         elif self.pause:
             self.curl.pause(self.curl.PAUSE_RECV)
-            self.pause_callback()
         else:
             self.curl.pause(self.curl.PAUSE_CONT)
-            self.resume_callback()
                 
     def header_function(self, raw_headline):
         if(self.remote_filename != None or not self.use_remote_filename):
@@ -134,6 +135,8 @@ class another_curl_class():
                 for i in li:
                     if i:
                         self.remote_filename = i
+                self.remote_filename = parse.unquote_plus(self.remote_filename)
+                #out of url encoding
             self.headers.clear()
             if self.remote_filename:
                 #you get the remote name! congratulations

@@ -58,10 +58,12 @@ class linked_list:
         self.sentinel = list_node()
         self.sentinel._prev = self.sentinel
         self.sentinel._next = self.sentinel
+        self.count = 0
 
     def append(self, new_node):
         new_node._next = self.sentinel
         self.sentinel._prev._next = new_node
+        self.count += 1
         self.sentinel._prev = new_node
 
     def popleft(self):
@@ -70,7 +72,9 @@ class linked_list:
            raise IndexError
        r = self.sentinel._next
        self.sentinel._next = self.sentinel._next._next
-       return r
+       self.count -= 1
+       del r
+       #return r
 
     def __getitem__(self, key):
         node = self.sentinel._next
@@ -107,11 +111,16 @@ class event_linked_list(linked_list):
                     if user.newest_ev_node < oldest_node_to_keep:
                         oldest_node_to_keep = user.newest_ev_node
 
+            c = 0
             while self.sentinel._next < oldest_node_to_keep and not self.sentinel._next is self.sentinel:
+                print('remove >', self.sentinel._next.to_dict(), 'its next is', self.sentinel._next._next.to_dict())
                 self.popleft()
-            #print('-'*40)
+                c += 1
+
+            print('-'*40)
             print("cleaning... the oldest event in the list is now", self.sentinel._next.event_id)
             print("the newes event in the list is now", self.sentinel._prev.event_id)
+            print(c, 'node(s) have been cleaned.', self.count, 'node(s) left')
         gc = Timer(20, self.garbage_collection)
         gc.start()
 
