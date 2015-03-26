@@ -1,6 +1,5 @@
 import datetime
 from threading import Lock, Event, Timer
-import threading
 
 class list_node:
     def __init__(self):
@@ -100,7 +99,7 @@ class event_linked_list(linked_list):
         if not (self.sentinel._next is self.sentinel or self.sentinel._next._next is self.sentinel):
             oldest_node_to_keep = self.sentinel._prev
 
-            print('---------------------------------------------')
+            #print('-'*40)
             with summary.mutexlock:
                 for user in self.users:
                     if user.newest_ev_node < oldest_node_to_keep:
@@ -108,9 +107,9 @@ class event_linked_list(linked_list):
 
             while self.sentinel._next < oldest_node_to_keep and not self.sentinel._next is self.sentinel:
                 self.popleft()
-            print("cleaning... the oldest event in the list is now", self.sentinel._next.event_id)
-            print("the newes event in the list is now", self.sentinel._prev.event_id)
-        gc = Timer(20, self.garbage_collection)
+            #print("cleaning... the oldest event in the list is now", self.sentinel._next.event_id)
+            #print("the newes event in the list is now", self.sentinel._prev.event_id)
+        gc = Timer(30, self.garbage_collection)
         gc.start()
 
     #def newest_nodes_ref(self, event_id):
@@ -146,6 +145,7 @@ class snapshot(dict):
     #key = task.identifier
     def update(self, new_ev_node):
         self.newest_ev_node = new_ev_node;
+        #print('trying to update the snapshot with', new_ev_node.to_dict())
         if(new_ev_node.ev_type == 'state'):
            if(new_ev_node.data == 'complete'):
             #need to delete this item from the snapshot
@@ -156,13 +156,17 @@ class snapshot(dict):
                 self[new_ev_node.task.identifier] = {'state': 'pending'}
                 return
 
-        self[new_ev_node.task.identifier][new_ev_node.ev_type] = new_ev_node.data
+        try:
+            self[new_ev_node.task.identifier][new_ev_node.ev_type] = new_ev_node.data
+        except Exception:
+            print("update error", "-"*40, new_ev_node.task.identifier, new_ev_node.ev_type, new_ev_node.data)
+            raise 
 
     def update_all(self):
         #todo plz no blocking spamerino
         while True:
             if self.newest_ev_node._next is event_list.sentinel:
-                event_list.new_event.wait(2)
+                event_list.new_event.wait(5)
                 #new node available
             else:
                 with self.mutexlock:

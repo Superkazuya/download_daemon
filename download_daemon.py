@@ -1,38 +1,34 @@
 from multiprocessing.pool import ThreadPool
-from threading import Thread, Timer
 from server import HTTP_request_handler, HTTP_server
-import cgitb
-from queue import Queue
+from threading import Thread
 from protocol import do_request
 from events import event_list, summary
+from task_collection import task_pending_queue
+import cgitb
 
-task_queue = Queue()
 
 #dirty?
-# synchronization in long-polling
 thread_num = 5
 
-HOST, PORT = 'localhost', 8080
+ADDR = ('', 8012)
 
 class grunt:
     def __init__(self):
-        #print('work work')
-        #check if there's a status change
         self.task = None
         #atomic?
         while True:
-            self.task = task_queue.get()
+            self.task = task_pending_queue.get()
             self.task.start()
             self.task = None
-            task_queue.task_done()
+            task_pending_queue.task_done()
 
 
 def apply_async_callback(arg):
     pass
-    #print(arg.url)
+    print(arg)
 
 def apply_async_error_callback(arg):
-    #print("error", arg)
+    print("error", arg)
     pass
     
 if __name__ == '__main__':
@@ -43,20 +39,11 @@ if __name__ == '__main__':
     summary_generating_thread = Thread(target = summary.update_all)
     summary_generating_thread.start()
     event_list.garbage_collection()
-    
-
-    HTTP_request_handler.task_queue = task_queue
-    serv = HTTP_server(("", 8080), HTTP_request_handler)
-    #generate ETag when init
-    try:
-        serv.serve_forever()
-    except KeyboardInterrupt:
-        pass
-
-    finally:
-            serv.shutdown()
-            summary_generating_thread.join()
-            thread_pool.close()
-            thread_pool.join()
+    serv = HTTP_server(ADDR, HTTP_request_handler)
+    serv.serve_forever()
+    serv.shutdown()
+    summary_generating_thread.join()
+    thread_pool.close()
+    thread_pool.join()
         
 

@@ -1,11 +1,12 @@
 from http import server
 from socketserver import ThreadingMixIn
-import cgi, cgitb
+import cgi
 from protocol import do_request
 import json
 import threading
 
 from events import event_list, summary
+from task_collection import existing_task_dict
 
 class HTTP_server(ThreadingMixIn, server.HTTPServer):
     pass
@@ -43,7 +44,6 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
             self.send_header('content-type', 'text/event-stream')
             self.send_header('Cache-Control', 'no-cache')
             self.end_headers()
-
             
             if 'Last-Event-ID' in self.headers:
                 #it's a reconnect
@@ -68,10 +68,7 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
                     event_list.users.append(self)
                 self.wfile.write(to_bytes('\nid: {0} \ndata: {1}'.format(eid, data)))
                 self.wfile.write(to_bytes('\n\n'))
-                self.wfile.flush()
-                #print("new summary data", data)
-
-            print("is it a new connection?", self.new_connection)
+                print("provide the new connection with summary data", data)
 
 #            while True:
 #                if (event._next is event_list.sentinel):
@@ -101,7 +98,6 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
                     json_data = json.dumps(next_event.to_dict())
                     self.wfile.write(to_bytes(json_data))
                     self.wfile.write(to_bytes('\n\n'))
-                    self.wfile.flush()
                     #event_list.newest_nodes_ref(next_event.event_id)
                     #event_list.newest_nodes_unref(self.newest_ev_node.event_id)
                     self.newest_ev_node = next_event
@@ -121,7 +117,7 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
             dic['active'] = ''
             dic['pending'] = ''
             dic['finished'] = ''
-            with open('main.html') as f:
+            with open('main.html', 'r') as f:
                 self.wfile.write(to_bytes(f.read().format(**dic)))
             return
 
@@ -132,25 +128,47 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
         length = int(self.headers['content-length'])
         form_text = self.rfile.read(length).decode('utf-8')
         form_input = cgi.parse_qs(form_text)
-        req = form_input['request']
-        if not len(req) > 0:
-            return
-        #self.wfile.write(to_bytes(str(req)))
-        req = req[0].split('\n')
-        count = 0
-        for line in req:
-            if not line:
-                continue
-            #print('processing requst cmdline', line)
-            ret = do_request(line, HTTP_request_handler.task_queue) 
-            if(ret):
-                self.wfile.write(to_bytes(ret+'\n'))
-            else:
-                count+=1
-        if count == 1:
-            self.wfile.write(to_bytes('1 request handled successfully.'))
-        elif count > 1:
-            self.wfile.write(to_bytes('{0} requests handled successfully.'.format(count)))
+        #print(form_input)
+        if 'request' in form_input:
+            req = form_input['request']
+            if not len(req) > 0:
+                return
+            #self.wfile.write(to_bytes(str(req)))
+            req = req[0].split('\n')
+            count = 0
+            for line in req:
+                if not line:
+                    continue
+                #print('processing requst cmdline', line)
+                ret = do_request(line) 
+                if(ret):
+                    self.wfile.write(to_bytes(ret+'\n'))
+                else:
+                    count+=1
+            if count == 1:
+                self.wfile.write(to_bytes('1 request handled successfully.'))
+            elif count > 1:
+                self.wfile.write(to_bytes('{0} requests handled successfully.'.format(count)))
+        elif 'pause' in form_input:
+            try:
+                existing_task_dict[form_input['pause'][0]].pause()
+            except KeyError:
+                print('jabroni outfit')
+
+        elif 'resume' in form_input:
+            try:
+                existing_task_dict[form_input['resume'][0]].resume()
+            except KeyError:
+                print('jabroni outfit')
+        elif 'cancel' in form_input:
+            try:
+                existing_task_dict[form_input['cancel'][0]].cancel()
+            except KeyError:
+                print('jabroni outfit')
+        else:
+            self.wfile.write(to_bytes('fuck you leather man.'))
+            
+                
 
     def on_del(self):
         if hasattr(self, 'newest_ev_node'):
@@ -160,11 +178,12 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
                 print(event_list.users)
             #it's a user of event_list, need to remove it from the user dict
             #event_list.newest_nodes_unref(self.newest_ev_node.event_id)
+            #TODO use weakref
                 
 if __name__ == '__main__':
-    cgitb.enable(display = 0, logdir = '/home/superkazuya/Code/15/download_daemon/log/')
     serv = HTTP_server(("", 8080), HTTP_request_handler)
     try:
         serv.serve_forever()
     except KeyboardInterrupt:
         serv.shutdown()
+

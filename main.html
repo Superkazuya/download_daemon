@@ -1,27 +1,26 @@
-
 <html>
   <head>
     <meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
-    <title>Download Server</title>
+    <title>Kappa? Kappa!</title>
   </head>
   <body>
     <div id="form">
 	<textarea rows="10" cols="300" name="request" id="request_input"></textarea>
 	<button id = "submit" onclick="submit_request()">submit</button>
-	<div id="response_msg">
-	  </div>
+	<div id = "response_msg"> </div>
     </div>
 
-    <h1>active tasks</h1>
-    <div id="active">{active}
+    <div id="status">
+	<h1>active tasks</h1>
+	<div id="active">{active}
+	</div>
+	<h1>pending tasks</h1>
+	<div id="pending">{pending}
+	</div>
+	<h1>paused tasks</h1>
+	<div id="paused">{finished}
+	</div>
     </div>
-    <h1>pending tasks</h1>
-    <div id="pending">{pending}
-    </div>
-    <h1>finished tasks</h1>
-    <div id="finished">{finished}
-    </div>
-    <!--<script type="text/javascript" src="/reload.js"></script>-->
     <script type="text/javascript" src="/task.js"></script>
     <script type="text/javascript" src="/submit.js"></script>
   </body>
