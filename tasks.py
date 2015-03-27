@@ -168,6 +168,7 @@ class download_task_from_cmdline(download_task):
         parser.add_argument('-o', '--output', action='store')
         parser.add_argument('-L', '--location', action='store_true')
         parser.add_argument('-O', '--remote-name', action='store_true')
+        parser.add_argument('-J', '--remote-header-name', action='store_true')
         parser.add_argument('url')
         args = parser.parse_known_args(cmdline)[0]
 
@@ -182,6 +183,8 @@ class download_task_from_cmdline(download_task):
 
         self.c.curl.setopt(self.c.curl.FOLLOWLOCATION, args.location)
         self.c.curl.setopt(self.c.curl.HTTPHEADER, args.header)
+        if args.remote_name or args.remote_header_name:
+            self.c.use_remote_filename = True
 
         self.enter_pending_queue()
         #call this when the task is ready

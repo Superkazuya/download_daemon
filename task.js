@@ -4,6 +4,23 @@ var dict = new Array();
 var prev_lastEventId = 0;
 var lastEventId = 0;
 
+window.addEventListener('load', function(){
+  if (window.Notification && Notification.permission !== "granted") {
+    Notification.requestPermission(function (status){
+	if(Notification.permission != status)
+	    Notification.permission = status;
+    });
+  }
+});
+
+function send_notification(title, msg_body, duration)
+{
+    var n = new Notification(title, {body: msg_body});
+    n.onshow = function () { 
+    setTimeout(n.close.bind(n), duration); 
+    }
+}
+
 event_src.onerror = function(e){
     console.log("error"+e);
     console.log(event_src);
@@ -79,6 +96,7 @@ task.prototype.change_state = function(new_state)
 {
     this.state = new_state;
     if(new_state.localeCompare('complete') == 0) {
+	send_notification(this.name_elem.innerHTML, 'canceled or completed', 5000);
 	this.destructor();
 	return;
     }
@@ -170,6 +188,8 @@ function update_listener(e)
 		dict[task_key].set_progress(parseInt(data));
 	    else if(type_key.localeCompare('description') == 0) 
 		dict[task_key].set_description(data);
+	    else if(type_key.localeCompare('error') == 0)
+		send_notification('error', data, 5000);
 	    else
 		console.log('unknown data:'+ e.data);
 	}
