@@ -10,7 +10,7 @@ function display_message(msg_field, msg)
 function display_message_attach(msg_field, msg)
 {
     var elem = document.getElementById(msg_field);
-    elem.innerHTML += msg;
+    elem.innerHTML += msg+'<br>';
     //parent_elem.appendChild(elem);
     if(submit_response_timeout != null) {
 	clearTimeout(submit_response_timeout);
@@ -23,7 +23,7 @@ function submit_request()
 {
     if(submit_form_responsive) {
 	submit_form('/', 'request_input');
-	setTimeout(function(){submit_form_responsive = true;}, 3000);
+	setTimeout(function(){submit_form_responsive = true;}, 10000);
     }
     else
 	display_message_attach('response_msg', 'Plz no spammerino');
@@ -40,9 +40,9 @@ function submit_form(path, id)
     var response_msg = document.getElementById('response_msg');
     var content = encodeURIComponent(document.getElementById(id).value.trim());
     if(content.length < 1)
-	display_message('response_msg', 'Nothing to submit.');
-    else
-	display_message('response_msg', 'Submitting ...');
+	display_message_attach('response_msg', 'Nothing to submit.');
+    //else
+	//display_message('response_msg', 'Submitting ...');
 	
     var param = document.getElementById(id).name+'='+content;
     xmlhttp.send(param);

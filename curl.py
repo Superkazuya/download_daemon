@@ -182,11 +182,13 @@ class another_curl_class():
             if self.action == 1:
                 self.curl.pause(self.curl.PAUSE_RECV)
                 self.pause_callback()
+                self.paused = True
                 self.action = 0
 
         elif self.action == 2: 
             self.curl.pause(self.curl.PAUSE_CONT)
             self.resume_callback()
+            self.paused = False
             self.action = 0
 
     def __the_one_and_the_only_real_progress_callback(self, *args, **kwargs):

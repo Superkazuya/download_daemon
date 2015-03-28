@@ -28,10 +28,9 @@ class form:
         if count == 1:
             ret_str += '1 request submitted successfully.\n'
         elif count > 1:
-            ret_str += '{0} request submitted successfully.\n'.format(self.count)
+            ret_str += '{0} request submitted successfully. おっほっほっほ〜 元気だ( ^ω^)\n'.format(count)
 
         return ret_str.replace('\n', '<br>') 
-                
             
 
 class service:
@@ -39,19 +38,19 @@ class service:
     def process(cls, request):
         req = shlex.split(request)
         if len(req) < 2:
-            return r'{0}: at least two args! fuck you leather man.'.format(req)
+            return r'{0}: at least two args! fuck you leather man.'.format("".join(x + " " for x in req))
         if hasattr(cls, 'do_'+req[0]):
             return getattr(cls, 'do_'+req[0])(req[1:])
         else:
-            return r'{0}: No such service. The leather club is two blocks down.'.format(req)
+            return r'{0}: No such service. The leather club is two blocks down.'.format("".join(x + " " for x in req))
         
 
     @staticmethod
     def do_download(download_param):
-        return download_task(download_param).init_message
+        return download_task(download_param).report_message
 
     @staticmethod
     def do_curl(download_param):
-        return download_task_from_cmdline(download_param).init_message
+        return download_task_from_cmdline(download_param).report_message
     
 

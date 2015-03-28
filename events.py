@@ -119,7 +119,7 @@ class event_linked_list(linked_list):
 
             logging.debug("cleaning... the oldest event in the list is now %s", self.sentinel._next.event_id)
             logging.debug("the newes event in the list is now %s", self.sentinel._prev.event_id)
-            logging.debug('%d node(s) have been cleaned. %d node(s) left.', c, self.count)
+            logging.info('%d node(s) have been cleaned. %d node(s) left.', c, self.count)
         gc = Timer(20, self.garbage_collection)
         gc.start()
 

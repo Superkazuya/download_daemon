@@ -16,7 +16,7 @@ class task():
         #weakref value dictionary
         #used when you want to control the task by it's identifier
         self.state = 0
-        self.init_message = ""
+        self.report_message = ""
         #will be used to report to the submit form
 
     def enter_pending_queue(self):
@@ -61,13 +61,12 @@ class download_task(task):
         try:
             self.curl_config(list_args)
         except ArgumentError as e:
-            logging.error('そんな arguments 大丈夫が? %s', str(e))
-            #self.generate_event('error', 'incorrect arguments: '+str(e))
-            self.init_message = 'そんな arguments 大丈夫が? = >{1}'.format(''.join(' '+x for x in list_args), str(e))
+            logging.error('Wrong arguments? %s', str(e))
+            self.report_message = 'そんな arguments 大丈夫が? = >{1}'.format(''.join(' '+x for x in list_args), str(e))
             #self.cancel()
             self.state = 4
         except Exception as e:
-            logging.critical('Unexpected exception!!!', str(e))
+            logging.critical('Unexpected exception! %s', str(e))
             self.generate_event('error', 'incorrect arguments: '+str(e))
             self.cancel()
 
