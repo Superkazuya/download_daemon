@@ -1,26 +1,25 @@
 import argparse
-import events
-from os import path, rename, remove
+from os import path
 from task_collection import task_pending_queue, task_delayed_dict, existing_task_dict
+from events import event_list
 from curl import another_curl_class
 
 class task():
-    event_list = events.event_list
     state_list = ['pending', 'paused', 'active', 'paused', 'complete', 'complete']
     #0: pending 1:paused while pending(delayed) 2:active 3:active but paused 4:canceled 5:finished 
-    #one single class variable means there's only one receiving end(one event stream in sse)
     def task_init(self):
         self.identifier = hex(id(self))
         #task unique identifier
         #work with weakref to get object by id
         existing_task_dict[self.identifier] = self
         #weakref value dictionary
+        #used when you want to control the task by it's identifier
 
     def enter_pending_queue(self):
         self.state_change(0)
         task_pending_queue.put(self)
 
-    def run(self):
+    def start(self):
         raise NotImplemented
     def pause(self):
         raise NotImplemented
@@ -32,14 +31,14 @@ class task():
     def generate_event(self, ev_type, data):
         #generate an event and append it to the end of the event_list
         #use mutex lock to guarantee the event_ids are in ascending order
-        with task.event_list.lock:
+        with event_list.lock:
             ev = events.task_event(ev_type, self)
             ev.data = data
-            task.event_list.append(ev)
+            event_list.append(ev)
             #if it's in the list, it's already readable.
             #because the last meaningful bytecode is STORE_ATTR(_prev) in linked_list append() method
-            task.event_list.new_event.set()
-            task.event_list.new_event.clear()
+            event_list.new_event.set()
+            event_list.new_event.clear()
 
     def state_change(self, new_state):
         self.state = new_state
@@ -48,39 +47,41 @@ class task():
 
         
 class download_task(task):
-    def __init__(self, url, filename = None):
+    def __init__(self, list_args):
+        #don't override __init__() if possible
         self.task_init()
-        self.finished, self.total = 0, 0
-        self.url = url
 
-        self.curl_config(filename)
+        self.state_change(0)
+        self.curl_config(list_args)
+        self.set_curl_callbacks()
+        #call this when the task is ready,
+        #before any message is sent
+        #TODO probably this is a bug?
         self.enter_pending_queue()
-        #call this when the task is ready
-        self.send_messages_when_ready()
 
 
-    def curl_config(self, filename):
-        self.c = another_curl_class()
-        self.c.handle_name_input(filename)
-        self.c.curl.setopt(self.c.curl.URL, self.url)
-        self.c.curl.setopt(self.c.curl.FOLLOWLOCATION, True)
-        self.c.curl.setopt(self.c.curl.MAXREDIRS, 5)
-        self.c.curl.setopt(self.c.curl.NOPROGRESS, False)
-        self.c.curl.setopt(self.c.curl.PROGRESSFUNCTION, self.progress)
+    def curl_config(self, list_args):
+        dct = {'location':True, 'url':list_args[0]}
 
+        try:
+            dct['output'] = list_args[1]
+        except IndexError:
+            logging.debug('no output option specified')
+            #pass
+            
+        self.c = another_curl_class(**dct)
+
+    def set_curl_callbacks(self):
         self.c.resume_callback = lambda:self.state_change(2)
         self.c.pause_callback = lambda:self.state_change(3)
         self.c.cancel_callback = lambda:self.state_change(4)
         self.c.complete_callback = lambda:self.state_change(5)
-        self.c.remote_filename_callback = lambda x:self.generate_event('description', x)
-        self.c.error_callback = lambda x:self.generate_event('error', self.c.remote_filename+' canceled due to error '+str(x)) if self.c.remote_filename \
-                                else self.generate_event('error', self.c.fullname +' ('+self.url+') canceled due to error '+str(x))
+        self.c.local_filename_callback = lambda x:self.generate_event('description', '{1} >>> {0}'.format(*path.split(x)))
+        self.c.remote_filename_callback = lambda x:self.generate_event('description', '{1} >>> {0}'.format(*path.split(x)))
+        self.c.error_callback = self.error_cb
 
-
-    def send_messages_when_ready(self):
-        #this should be sent after the task is enqueued
-        if not self.c.use_remote_filename:
-            self.generate_event('description', path.basename(self.c.fullname))
+        self.finished, self.total = 0, 0
+        self.c.progress_callback = self.progress
 
     def pause(self):
         #cannot pause when activated 
@@ -134,7 +135,7 @@ class download_task(task):
 
         self.state_change(2)
         #if state is pending
-        self.c.download(self.url)
+        self.c.download()
         #if self.c.curl.getinfo(self.c.curl.RESPONSE_CODE) != 200:
         #    print("response code: {0}".format(self.c.curl.RESPONSE_CODE))
         
@@ -146,8 +147,6 @@ class download_task(task):
         #    print(string.format(self.filename, downloaded, total_download, percentage))
         #except ZeroDivisionError:
         #    print(self.filename, downloaded, total_download)
-        self.c.in_progress_callback()
-        
         if total_download > self.total:
            self.generate_event('size', total_download)
            self.total = total_download
@@ -158,11 +157,16 @@ class download_task(task):
                 self.generate_event('progress', downloaded)
                 self.finished = downloaded
 
+    def error_cb(msg):
+        if self.c.remote_filename:
+            self.generate_event('error', self.c.remote_filename+' canceled due to error '+str(msg)) 
+        else:
+            self.generate_event('error', self.c.basename +' ('+self.c.url+') canceled due to error '+str(msg))
+
+
        
 class download_task_from_cmdline(download_task):
-    def __init__(self, *cmdline):
-        self.task_init()
-
+    def curl_config(self, list_args):
         parser = argparse.ArgumentParser()
         parser.add_argument('-H', '--header', action='append')
         parser.add_argument('-o', '--output', action='store')
@@ -170,22 +174,6 @@ class download_task_from_cmdline(download_task):
         parser.add_argument('-O', '--remote-name', action='store_true')
         parser.add_argument('-J', '--remote-header-name', action='store_true')
         parser.add_argument('url')
-        args = parser.parse_known_args(cmdline)[0]
+        args = parser.parse_known_args(list_args)[0]
 
-        if args.output:
-            filename = args.output
-        else:
-            filename = None
-        self.finished, self.total = 0, 0
-
-        self.url = args.url
-        self.curl_config(filename)
-
-        self.c.curl.setopt(self.c.curl.FOLLOWLOCATION, args.location)
-        self.c.curl.setopt(self.c.curl.HTTPHEADER, args.header)
-        if args.remote_name or args.remote_header_name:
-            self.c.use_remote_filename = True
-
-        self.enter_pending_queue()
-        #call this when the task is ready
-        self.send_messages_when_ready()
+        self.c = another_curl_class(**vars(args))

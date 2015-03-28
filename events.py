@@ -171,7 +171,9 @@ class snapshot(dict):
         try:
             self[new_ev_node.task.identifier][new_ev_node.ev_type] = new_ev_node.data
         except Exception:
-            print("update error", "-"*40, new_ev_node.task.identifier, new_ev_node.ev_type, new_ev_node.data)
+            print("-"*20, "update error", "-"*20)
+            print(new_ev_node.task.identifier, new_ev_node.ev_type, new_ev_node.data)
+            print('-'*45)
             raise 
 
     def update_all(self):

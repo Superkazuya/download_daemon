@@ -15,7 +15,7 @@ window.addEventListener('load', function(){
 
 function send_notification(title, msg_body, duration)
 {
-    var n = new Notification(title, {body: msg_body});
+    var n = new Notification('<span color="#ef5800"><big><b>'+title+'</b></big></span>', {body: msg_body});
     n.onshow = function () { 
     setTimeout(n.close.bind(n), duration); 
     }
