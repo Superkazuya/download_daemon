@@ -5,17 +5,12 @@ from urllib import parse
 import logging
 
 class another_curl_class():
-    arg_list = ['header', 'output', 'location', 'remote_name', 'remote_name_header']
+    arg_list = ['header', 'output', 'location', 'remote_name', 'remote_name_header', 'resume_callback', 'pause_callback', 'cancel_callback', 'complete_callback',
+                'local_filename_callback', 'remote_filename_callback', 'error_callback', 'progress_callback']
     def __init__(self, **kwargs):
         self.curl = pycurl.Curl()
         self.headers_received = {}
 
-        try:
-            self.url = kwargs['url']
-        except KeyError:
-            logging.exception('no url? kappa')
-            self.error_callback('no url provided')
-            self.cancel = True
 
         #pycurl options
         self.header = []
@@ -29,6 +24,15 @@ class another_curl_class():
                 setattr(self, arg, kwargs[arg])
             except KeyError:
                 pass
+
+        try:
+            #usually this will be handled during the argument parsing phase
+            self.url = kwargs['url']
+        except KeyError:
+            logging.exception('no url? kappa')
+            #self.error_callback('no url provided')
+            raise
+
 
         self.use_remote_filename = self.remote_name or self.remote_name_header
         #not a libcurl option, need to implement it explicitly
@@ -136,8 +140,9 @@ class another_curl_class():
         try:
             os.remove(self.get_fullpath())
         except OSError as e:
-            logging.exception('cannot remove %s, is it a drectory?', self.get_fullpath())
-            self.error_callback('in cancel_cleanup '+ str(e))
+            if os.path.exists(self.get_fullpath()):
+                logging.exception('cannot remove %s, is it a drectory?', self.get_fullpath())
+                self.error_callback('in cancel_cleanup '+ str(e))
 
     def do_cancel(self):
         #cancel is irreversible
@@ -152,7 +157,7 @@ class another_curl_class():
         elif self.paused:
             logging.info('pause error: already paused.')
         elif self.action:
-            logging.info('pause error: There\'s already a action.')
+            logging.info('pause error: There\'s already an action.')
         else:
             self.action = 1
 
@@ -163,7 +168,7 @@ class another_curl_class():
         elif not self.paused:
             logging.info('resume error: not paused.')
         elif self.action:
-            logging.info('resume error: There\'s already a action.')
+            logging.info('resume error: There\'s already an action.')
         else:
             self.action = 2
 

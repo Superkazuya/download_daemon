@@ -157,29 +157,21 @@ class snapshot(dict):
     def update(self, new_ev_node):
         self.newest_ev_node = new_ev_node;
         logging.debug('trying to update the snapshot with %s', str(new_ev_node.to_dict()))
-        if(new_ev_node.ev_type == 'state'):
-           if(new_ev_node.data == 'complete'):
+        if(new_ev_node.ev_type == 'state' and new_ev_node.data == 'complete'):
             #need to delete this item from the snapshot
+            #*EVERY* task should finish with this event
+            try:
                 del self[new_ev_node.task.identifier] 
-                return
-           elif(new_ev_node.data == 'pending'):
-               try:
-                   self[new_ev_node.task.identifier][new_ev_node.ev_type] = new_ev_node.data
-               except KeyError:
-                   self[new_ev_node.task.identifier] = {'state': 'pending'}
-                   return
-        elif new_ev_node.ev_type == 'description':
-               try:
-                   self[new_ev_node.task.identifier][new_ev_node.ev_type] = new_ev_node.data
-               except KeyError:
-                   self[new_ev_node.task.identifier] = {'description': new_ev_node.data}
+            except KeyError:
+                pass
+        else:
 
-        # the only two possible initial messages: pending and description
-        try:
-            self[new_ev_node.task.identifier][new_ev_node.ev_type] = new_ev_node.data
-        except Exception:
-            logging.exception("update error: id: %s, type: %s, data:%s", new_ev_node.task.identifier, new_ev_node.ev_type, new_ev_node.data)
-            raise 
+            try:
+                self[new_ev_node.task.identifier][new_ev_node.ev_type] = new_ev_node.data
+            except KeyError:
+                self[new_ev_node.task.identifier] = {}
+                self[new_ev_node.task.identifier][new_ev_node.ev_type] = new_ev_node.data
+        #now a task can begin with ANY message, even with 'complete'
 
     def update_all(self):
         while True:

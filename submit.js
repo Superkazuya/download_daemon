@@ -1,11 +1,22 @@
 var submit_form_responsive = true;
+var submit_response_timeout = null;
 
 function display_message(msg_field, msg)
 {
     var elem = document.getElementById(msg_field);
     elem.innerHTML = msg;
+}
+
+function display_message_attach(msg_field, msg)
+{
+    var elem = document.getElementById(msg_field);
+    elem.innerHTML += msg;
     //parent_elem.appendChild(elem);
-    setTimeout(function(){display_message(msg_field, '')}, 5000);
+    if(submit_response_timeout != null) {
+	clearTimeout(submit_response_timeout);
+	submit_response_timeout = null;
+    }
+    submit_response_timeout = setTimeout(function(){document.getElementById(msg_field).innerHTML = ""}, 10000);
 }
 
 function submit_request()
@@ -15,7 +26,7 @@ function submit_request()
 	setTimeout(function(){submit_form_responsive = true;}, 3000);
     }
     else
-	display_message('response_msg', 'Plz no spammerino');
+	display_message_attach('response_msg', 'Plz no spammerino');
 
 }
 
@@ -37,7 +48,7 @@ function submit_form(path, id)
     xmlhttp.send(param);
     xmlhttp.onreadystatechange = function(){
     	if(xmlhttp.readyState == 4 && xmlhttp.status == 200) {
-    	    display_message('response_msg', xmlhttp.responseText);
+    	    display_message_attach('response_msg', xmlhttp.responseText);
     	    submit_form_responsive = false;
     	}
 

@@ -15,6 +15,9 @@ class task():
         existing_task_dict[self.identifier] = self
         #weakref value dictionary
         #used when you want to control the task by it's identifier
+        self.state = 0
+        self.init_message = ""
+        #will be used to report to the submit form
 
     def enter_pending_queue(self):
         self.state_change(0)
@@ -40,7 +43,7 @@ class task():
             #because the last meaningful bytecode is STORE_ATTR(_prev) in linked_list append() method
             event_list.new_event.set()
             event_list.new_event.clear()
-        logging.debug('new event task: %s', ev.to_dict())
+        logging.debug('new event generated: %s', ev.to_dict())
 
     def state_change(self, new_state):
         self.state = new_state
@@ -53,11 +56,39 @@ class download_task(task):
         #don't override __init__() if possible
         self.task_init()
 
-        self.curl_config(list_args)
         self.set_curl_callbacks()
-        self.enter_pending_queue()
-        #call this when the task is ready,
 
+        try:
+            self.curl_config(list_args)
+        except ArgumentError as e:
+            logging.error('そんな arguments 大丈夫が? %s', str(e))
+            #self.generate_event('error', 'incorrect arguments: '+str(e))
+            self.init_message = 'そんな arguments 大丈夫が? = >{1}'.format(''.join(' '+x for x in list_args), str(e))
+            #self.cancel()
+            self.state = 4
+        except Exception as e:
+            logging.critical('Unexpected exception!!!', str(e))
+            self.generate_event('error', 'incorrect arguments: '+str(e))
+            self.cancel()
+
+        if self.state in [0, 1, 2, 3]:
+            self.enter_pending_queue()
+        #call this when the task is ready,
+        #only enter the pending queue when the task is in correct state
+
+
+    def set_curl_callbacks(self):
+        self.callback_dct = {'resume_callback' : lambda:self.state_change(2),
+                    'pause_callback' : lambda:self.state_change(3),
+                    'cancel_callback' : lambda:self.state_change(4),
+                    'complete_callback' : lambda:self.state_change(5),
+                    'local_filename_callback' : lambda x:self.generate_event('description', '{1} >>> {0}'.format(*path.split(x))),
+                    'remote_filename_callback' : lambda x:self.generate_event('description', '{1} >>> {0}'.format(*path.split(x))),
+                    'error_callback' : self.error_cb,
+                    'progress_callback' : self.progress
+                    }
+
+        self.finished, self.total = 0, 0
 
     def curl_config(self, list_args):
         dct = {'location':True, 'url':list_args[0]}
@@ -67,26 +98,8 @@ class download_task(task):
         except IndexError:
             logging.debug('no output option specified.')
             
+        dct.update(self.callback_dct)
         self.c = another_curl_class(**dct)
-
-
-    def set_curl_callbacks(self):
-        if not self.c.use_remote_filename:
-            logging.info('using specified name')
-            self.generate_event('description', '{1} >>> {0}'.format(*path.split(self.c.get_fullpath())))
-            #this is saaaaaaaaaaaaaad
-
-        self.c.resume_callback = lambda:self.state_change(2)
-        self.c.pause_callback = lambda:self.state_change(3)
-        self.c.cancel_callback = lambda:self.state_change(4)
-        self.c.complete_callback = lambda:self.state_change(5)
-        #self.c.local_filename_callback = lambda x:self.generate_event('description', '{1} >>> {0}'.format(*path.split(x)))
-        #this callback will be called before the init of c finishes. So it will never be called. S A D B O Y S
-        self.c.remote_filename_callback = lambda x:self.generate_event('description', '{1} >>> {0}'.format(*path.split(x)))
-        self.c.error_callback = self.error_cb
-
-        self.finished, self.total = 0, 0
-        self.c.progress_callback = self.progress
 
     def pause(self):
         #cannot pause when activated 
@@ -162,14 +175,30 @@ class download_task(task):
 
        
 class download_task_from_cmdline(download_task):
+
     def curl_config(self, list_args):
-        parser = argparse.ArgumentParser()
+        parser = myparser()
         parser.add_argument('-H', '--header', action='append')
         parser.add_argument('-o', '--output', action='store')
         parser.add_argument('-L', '--location', action='store_true')
         parser.add_argument('-O', '--remote-name', action='store_true')
         parser.add_argument('-J', '--remote-header-name', action='store_true')
         parser.add_argument('url')
-        args = parser.parse_known_args(list_args)[0]
 
-        self.c = another_curl_class(**vars(args))
+        try:
+            args = parser.parse_known_args(list_args)[0]
+        except:
+            raise
+            #logging.exception('Exception while parsing curl command %s')
+
+        dct = vars(args)
+        dct.update(self.callback_dct)
+        self.c = another_curl_class(**dct)
+
+class ArgumentError(TypeError):
+    pass
+
+class myparser(argparse.ArgumentParser):
+    def error(self, error):
+        raise ArgumentError(error)
+
