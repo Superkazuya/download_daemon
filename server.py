@@ -1,12 +1,13 @@
 from http import server
 from socketserver import ThreadingMixIn
-import cgi
-from protocol import do_request
+from urllib import parse
+from protocol import form
 import json
 import threading
+import logging
 
 from events import event_list, summary
-from task_collection import existing_task_dict
+#from task_collection import existing_task_dict
 
 class HTTP_server(ThreadingMixIn, server.HTTPServer):
     pass
@@ -20,13 +21,12 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
             return server.BaseHTTPRequestHandler.handle(self)
         except BrokenPipeError:
             #some client disconnected during the HTTP stream
-            print('active threads num', threading.active_count())
+            logging.info('active threads num %d', threading.active_count())
         except (server.socket.error, server.socket.timeout) as e:
-            print('-'*40)
-            print("connection dropped", e.args)
+            logging.exception("connection dropped %s", e.args)
 
     def do_GET(self):
-        print('active threads num', threading.active_count())
+        logging.info('active threads num %d', threading.active_count())
         if self.path.endswith(".js"):
             with open('.'+self.path) as f:
                 self.send_response(200)
@@ -47,10 +47,10 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
                 #it's a reconnect
                 #strangely, it's up to the server to decide if all task status should be sent
                 last_event_id = self.headers['Last-Event-ID']
-                print("last_event_id in headers", last_event_id)
+                logging.info("last_event_id in headers: %s", last_event_id)
                 try:
                     self.newest_ev_node = event_list[last_event_id]
-                    print(self.newest_ev_node)
+                    logging.info('Find matching ev node: %s', self.newest_ev_node)
                     self.new_connection = False
                 except KeyError:
                     self.new_connection = True
@@ -66,7 +66,7 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
                     #it's a garbage collection thing
                 self.wfile.write(to_bytes('\nid: {0} \ndata: {1}'.format(self.newest_ev_node.event_id, data)))
                 self.wfile.write(to_bytes('\n\n'))
-                print("provide the new connection with summary data", data)
+                logging.info("provide the new connection with summary data %s", str(data))
 
             while True:
                 if not self.newest_ev_node._next is event_list.sentinel:
@@ -103,46 +103,12 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers['content-length'])
         form_text = self.rfile.read(length).decode('utf-8')
-        form_input = cgi.parse_qs(form_text)
-        #print(form_input)
-        if 'request' in form_input:
-            req = form_input['request']
-            if not len(req) > 0:
-                return
-            #self.wfile.write(to_bytes(str(req)))
-            req = req[0].split('\n')
-            count = 0
-            for line in req:
-                if not line:
-                    continue
-                #print('processing requst cmdline', line)
-                ret = do_request(line) 
-                if(ret):
-                    self.wfile.write(to_bytes(ret+'\n'))
-                else:
-                    count+=1
-            if count == 1:
-                self.wfile.write(to_bytes('1 request handled successfully.'))
-            elif count > 1:
-                self.wfile.write(to_bytes('{0} requests handled successfully.'.format(count)))
-        elif 'pause' in form_input:
-            try:
-                existing_task_dict[form_input['pause'][0]].pause()
-            except KeyError:
-                print('jabroni outfit')
-
-        elif 'resume' in form_input:
-            try:
-                existing_task_dict[form_input['resume'][0]].resume()
-            except KeyError:
-                print('jabroni outfit')
-        elif 'cancel' in form_input:
-            try:
-                existing_task_dict[form_input['cancel'][0]].cancel()
-            except KeyError:
-                print('jabroni outfit')
-        else:
-            self.wfile.write(to_bytes('fuck you leather man.'))
+        form_input = parse.parse_qs(form_text)
+        ret = form.process(form_input)
+        try:
+            self.wfile.write(to_bytes(ret))
+        except TypeError:
+            pass
             
                  
 if __name__ == '__main__':

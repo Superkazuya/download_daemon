@@ -1,7 +1,6 @@
 from multiprocessing.pool import ThreadPool
 from server import HTTP_request_handler, HTTP_server
 from threading import Thread
-from protocol import do_request
 from events import event_list, summary
 from task_collection import task_pending_queue
 import logging
@@ -25,23 +24,17 @@ class grunt:
                 self.task.state_change(4)
                 self.task.generate_event('error', str(e))
 
-                logging.exception("-"*40)
-                logging.exception("our grunt reported an error.")
-                logging.exception(str(e))
-                logging.exception("-"*40)
+                logging.exception("our grunt reported an error: %s.", e)
 
             self.task = None
             task_pending_queue.task_done()
 
 
 def apply_async_error_callback(arg):
-    logging.error("-"*40)
-    logging.error("async_error_callback")
-    logging.error(arg)
-    logging.error("-"*40)
+    logging.error("async_error_callback: %s", arg)
     
 if __name__ == '__main__':
-    logging.basicConfig()
+    logging.basicConfig(level=logging.INFO)
     thread_pool = ThreadPool(thread_num)
     for i in range(thread_num):
         thread_pool.apply_async(grunt, error_callback=apply_async_error_callback)

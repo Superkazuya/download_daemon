@@ -2,6 +2,7 @@ import pycurl
 import os, re
 import uuid 
 from urllib import parse
+import logging
 
 class another_curl_class():
     arg_list = ['header', 'output', 'location', 'remote_name', 'remote_name_header']
@@ -12,7 +13,7 @@ class another_curl_class():
         try:
             self.url = kwargs['url']
         except KeyError:
-            print('no url? kappa')
+            logging.exception('no url? kappa')
             self.error_callback('no url provided')
             self.cancel = True
 
@@ -90,7 +91,7 @@ class another_curl_class():
             self.local_filename_callback(self.get_fullpath())
 
         if os.path.exists(self.get_fullpath()):
-            print(self.get_fullpath(), 'exists. overwrite boys')
+            logging.warning(self.get_fullpath()+' exists. overwrite boys')
                 
         try:
             os.makedirs(self.path)
@@ -123,8 +124,11 @@ class another_curl_class():
 
     def apply_remote_name(self):
         if(self.use_remote_filename):
-            print('trying to rename',os.path.abspath(self.path+'/'+self.remote_filename))
-            os.rename(self.get_fullpath(), os.path.abspath(self.path+'/'+self.remote_filename))
+            logging.info('trying to rename %s', os.path.abspath(self.path+'/'+self.remote_filename))
+            fullname = os.path.abspath(self.path+'/'+self.remote_filename)
+            if os.path.exists(fullname):
+                logging.warning('%s already exists. overwrite boys', fullname)
+            os.rename(self.get_fullpath(), fullname)
             #TODO if there's already a file with the same name, rename it 
 
     def cancel_cleanup(self):
@@ -132,34 +136,34 @@ class another_curl_class():
         try:
             os.remove(self.get_fullpath())
         except OSError as e:
-            print('cannot remove', self.get_fullpath(), 'Is it a directory?')
+            logging.exception('cannot remove %s, is it a drectory?', self.get_fullpath())
             self.error_callback('in cancel_cleanup '+ str(e))
 
     def do_cancel(self):
         #cancel is irreversible
         if self.cancel:
-            print('cancel error: already canceled.')
+            logging.info('cancel error: already canceled.')
         else:
             self.cancel = True
 
     def do_pause(self):
         if self.cancel:
-            print('pause error: already canceled.')
+            logging.info('pause error: already canceled.')
         elif self.paused:
-            print('pause error: already paused.')
+            logging.info('pause error: already paused.')
         elif self.action:
-            print('pause error: There\'s already a action.')
+            logging.info('pause error: There\'s already a action.')
         else:
             self.action = 1
 
 
     def do_resume(self):
         if self.cancel:
-            print('resume error: already canceled.')
+            logging.info('resume error: already canceled.')
         elif not self.paused:
-            print('resume error: not paused.')
+            logging.info('resume error: not paused.')
         elif self.action:
-            print('resume error: There\'s already a action.')
+            logging.info('resume error: There\'s already a action.')
         else:
             self.action = 2
 
@@ -191,7 +195,6 @@ class another_curl_class():
             return
         raw_headline = raw_headline.decode('utf-8').strip()
         #raw_headline = raw_headline.decode('iso-8859-1').strip()
-        #print('http header >>>', raw_headline)
         if not raw_headline:
             #end of header
             if 'content-disposition' in self.headers_received:
@@ -209,12 +212,13 @@ class another_curl_class():
                 tmp = ""
                 while not self.remote_filename == tmp:
                     tmp, self.remote_filename = self.remote_filename, parse.unquote_plus(self.remote_filename)
+                logging.info('We are using the last part of the effective url as file name.')
                 #out of url encoding
             self.headers_received.clear()
             if self.remote_filename:
                 #you get the remote name! congratulations
                 self.remote_filename_callback(os.path.abspath(self.path+'/'+self.remote_filename))
-                print('using remote name:', self.remote_filename)
+                logging.info('using remote name: %s', self.remote_filename)
         elif ':' in raw_headline:
             name, value = raw_headline.split(':', 1)
             name = name.strip().lower()

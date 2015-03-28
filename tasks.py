@@ -1,8 +1,9 @@
 import argparse
 from os import path
 from task_collection import task_pending_queue, task_delayed_dict, existing_task_dict
-from events import event_list
+from events import event_list, task_event
 from curl import another_curl_class
+import logging
 
 class task():
     state_list = ['pending', 'paused', 'active', 'paused', 'complete', 'complete']
@@ -32,13 +33,14 @@ class task():
         #generate an event and append it to the end of the event_list
         #use mutex lock to guarantee the event_ids are in ascending order
         with event_list.lock:
-            ev = events.task_event(ev_type, self)
+            ev = task_event(ev_type, self)
             ev.data = data
             event_list.append(ev)
             #if it's in the list, it's already readable.
             #because the last meaningful bytecode is STORE_ATTR(_prev) in linked_list append() method
             event_list.new_event.set()
             event_list.new_event.clear()
+        logging.debug('new event task: %s', ev.to_dict())
 
     def state_change(self, new_state):
         self.state = new_state
@@ -51,13 +53,10 @@ class download_task(task):
         #don't override __init__() if possible
         self.task_init()
 
-        self.state_change(0)
         self.curl_config(list_args)
         self.set_curl_callbacks()
-        #call this when the task is ready,
-        #before any message is sent
-        #TODO probably this is a bug?
         self.enter_pending_queue()
+        #call this when the task is ready,
 
 
     def curl_config(self, list_args):
@@ -66,17 +65,23 @@ class download_task(task):
         try:
             dct['output'] = list_args[1]
         except IndexError:
-            logging.debug('no output option specified')
-            #pass
+            logging.debug('no output option specified.')
             
         self.c = another_curl_class(**dct)
 
+
     def set_curl_callbacks(self):
+        if not self.c.use_remote_filename:
+            logging.info('using specified name')
+            self.generate_event('description', '{1} >>> {0}'.format(*path.split(self.c.get_fullpath())))
+            #this is saaaaaaaaaaaaaad
+
         self.c.resume_callback = lambda:self.state_change(2)
         self.c.pause_callback = lambda:self.state_change(3)
         self.c.cancel_callback = lambda:self.state_change(4)
         self.c.complete_callback = lambda:self.state_change(5)
-        self.c.local_filename_callback = lambda x:self.generate_event('description', '{1} >>> {0}'.format(*path.split(x)))
+        #self.c.local_filename_callback = lambda x:self.generate_event('description', '{1} >>> {0}'.format(*path.split(x)))
+        #this callback will be called before the init of c finishes. So it will never be called. S A D B O Y S
         self.c.remote_filename_callback = lambda x:self.generate_event('description', '{1} >>> {0}'.format(*path.split(x)))
         self.c.error_callback = self.error_cb
 
@@ -93,7 +98,7 @@ class download_task(task):
             #will be handled by curl.py
             #callback will be called when the state change is done successfully
         else:
-            print('pause error', self.state)
+            logging.error('pause error: state %d', self.state)
             
     def resume(self):
         if self.state == 1:
@@ -106,7 +111,7 @@ class download_task(task):
         elif self.state == 3:
             self.c.do_resume()
         else:
-            print('resume error', self.state)
+            logging.error('resume error: state %d', self.state)
 
     def cancel(self):
         if self.state == 0:
@@ -118,7 +123,7 @@ class download_task(task):
         elif self.state == 2 or self.state == 3:
             self.c.do_cancel()
         else:
-            print('cancel error', self.state)
+            logging.error('cancel error: state %d', self.state)
 
     def start(self):
         #check those are canceled or paused. no state change here
@@ -127,7 +132,7 @@ class download_task(task):
             task_delayed_dict[self.identifier] = self
             return
         elif self.state == 2 or self.state == 3 or self.state == 5:
-            print('start error', self.state)
+            logging.error('start error: state %d', self.state)
             return
         elif self.state == 4:
             #canceled while it was still in the task_pending_queue
@@ -136,17 +141,8 @@ class download_task(task):
         self.state_change(2)
         #if state is pending
         self.c.download()
-        #if self.c.curl.getinfo(self.c.curl.RESPONSE_CODE) != 200:
-        #    print("response code: {0}".format(self.c.curl.RESPONSE_CODE))
         
     def progress(self, total_download, downloaded, total_upload, uploaded):
-        #string = r"Downloading to {0} {1:.2f}/{2:.2f} ({3:.2f}%)"
-        #try:
-        #    percentage = 100*downloaded/total_download
-        #    #print("\r", string.format(self.filename, downloaded, total_download, percentage), end='')
-        #    print(string.format(self.filename, downloaded, total_download, percentage))
-        #except ZeroDivisionError:
-        #    print(self.filename, downloaded, total_download)
         if total_download > self.total:
            self.generate_event('size', total_download)
            self.total = total_download
@@ -157,7 +153,7 @@ class download_task(task):
                 self.generate_event('progress', downloaded)
                 self.finished = downloaded
 
-    def error_cb(msg):
+    def error_cb(self, msg):
         if self.c.remote_filename:
             self.generate_event('error', self.c.remote_filename+' canceled due to error '+str(msg)) 
         else:
