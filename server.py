@@ -21,6 +21,7 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
             return server.BaseHTTPRequestHandler.handle(self)
         except BrokenPipeError:
             #some client disconnected during the HTTP stream
+            logging.info('connection %s is dead. BibleThump', str(self.client_address))
             logging.info('active threads num %d', threading.active_count())
         except (server.socket.error, server.socket.timeout) as e:
             logging.exception("connection dropped %s", e.args)
@@ -66,7 +67,7 @@ class HTTP_request_handler(server.BaseHTTPRequestHandler):
                     #it's a garbage collection thing
                 self.wfile.write(to_bytes('\nid: {0} \ndata: {1}'.format(self.newest_ev_node.event_id, data)))
                 self.wfile.write(to_bytes('\n\n'))
-                logging.info("provide the new connection with summary data %s", str(data))
+                logging.info("provide the new connection %s with summary data %s", str(self.client_address), str(data))
 
             while True:
                 if not self.newest_ev_node._next is event_list.sentinel:
